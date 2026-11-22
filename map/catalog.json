@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "defaultMap": "shipment",
+  "defaultMode": "tdm",
+  "maps": [
+    {
+      "id": "shipment",
+      "version": "3"
+    }
+  ]
+}
