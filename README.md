@@ -6,3 +6,5 @@
 已有模式：团队死斗、反作弊测试、Bot测试(HackBot)
 
 前置：[NodeJS](https://nodejs.org)
+
+测试类：anticheat.zip 反作弊，需手动解压并注入。已有检测Aim、RotationSnap、RotationSmooth、BadPackets、Timer、AI(需自行训练模型)
