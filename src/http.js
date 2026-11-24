@@ -3,7 +3,7 @@ import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import { ASSETS_DIR, RTC_ICE_SERVERS, WEAPON_SPECS, MODES } from "./config.js";
-import { RoomManager, Player } from "./room.js";
+import { RoomManager, Player, normalizeM200Build } from "./room.js";
 import { WsConnection, acceptUpgrade } from "./ws.js";
 import { decodeInput } from "./snapshot.js";
 import { createRtcRelay } from "./rtc.js";
@@ -79,6 +79,7 @@ function createSession(manager, conn) {
     const modeId = msg.modeId || "tdm";
     const uid = typeof msg.uid === "string" && msg.uid ? msg.uid.slice(0, 256) : null;
     const resumeToken = typeof msg.resumeToken === "string" && msg.resumeToken ? msg.resumeToken.slice(0, 128) : null;
+    const m200Build = normalizeM200Build(msg.m200Build);
 
     if (msg.resume && msg.room && resumeToken) {
       const existing = manager.get(msg.room)?.findByResume(resumeToken);
@@ -87,6 +88,7 @@ function createSession(manager, conn) {
         room = manager.get(msg.room);
         player.conn = conn;
         player.connected = true;
+        if (m200Build) player.m200Build = m200Build;
         const previousClose = conn.onClose;
         conn.onClose = () => {
           if (previousClose) previousClose();
@@ -95,6 +97,7 @@ function createSession(manager, conn) {
         conn.sendJSON({
           type: "welcome", id: player.id, room: room.code, resume: true,
           resumeToken: player.resumeToken, inputSeq: 0, weapons: WEAPON_SPECS,
+          m200Build: player.m200Build,
         });
         conn.sendJSON(room.rosterPayload());
         return;
@@ -120,6 +123,7 @@ function createSession(manager, conn) {
     }
 
     player = new Player(room, { uid: uid || undefined, name, team: 0, bot: false, conn });
+    player.m200Build = m200Build;
     if (!room.addSeat(player)) {
       conn.sendJSON({ type: "error", message: "room or team is full" });
       conn.destroy();
@@ -130,6 +134,7 @@ function createSession(manager, conn) {
     conn.sendJSON({
       type: "welcome", id: player.id, room: room.code, resume: false,
       resumeToken: player.resumeToken, inputSeq: 0, weapons: WEAPON_SPECS,
+      m200Build: player.m200Build,
     });
     conn.sendJSON(room.rosterPayload());
     manager.onRoomChanged();

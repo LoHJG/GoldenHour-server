@@ -5,6 +5,17 @@ import { World, STEP, heightOf } from "./world.js";
 
 let nextPlayerId = 1;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const M200_PARTS = ["optic", "muzzle", "underbarrel", "magazine", "stock", "camo"];
+
+function normalizeM200Build(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const build = {};
+  for (const part of M200_PARTS) {
+    const choice = value[part];
+    if (typeof choice === "string" && /^[A-Za-z0-9_-]{1,48}$/.test(choice)) build[part] = choice;
+  }
+  return Object.keys(build).length ? build : null;
+}
 
 function makeCode() {
   return crypto.randomBytes(4).toString("hex").toUpperCase();
@@ -91,6 +102,7 @@ export class Player {
     this.respawnAt = 0;
     this.lastShotAt = 0;
     this.rttMs = 0;
+    this.m200Build = null;
     this.maxLagMs = MATCH.lagCompensationMs;
     this.nextPingAt = 0;
     this.pingSentAt = 0;
@@ -696,7 +708,15 @@ publish() {
   handleCommand(player, msg) {
     switch (msg.type) {
       case "equip": {
-        this.tryEquip(player, msg.weapon);
+        this.tryEquip(player, msg);
+        break;
+      }
+      case "loadout": {
+        player.m200Build = normalizeM200Build(msg.m200Build);
+        player.conn?.sendJSON({
+          type: "loadout", inputSeq: player.ack,
+          weapons: WEAPON_SPECS, m200Build: player.m200Build,
+        });
         break;
       }
       case "team": {
@@ -753,8 +773,12 @@ publish() {
     this.manager.onRoomChanged();
   }
 
-  tryEquip(player, weapon) {
-    if (!WEAPONS.includes(weapon) || player.weapon === weapon) return;
+  tryEquip(player, weaponOrMessage) {
+    const message = typeof weaponOrMessage === "string" ? { weapon: weaponOrMessage } : (weaponOrMessage || {});
+    const weapon = message.weapon;
+    if (!WEAPONS.includes(weapon)) return;
+    if (message.m200Build !== undefined) player.m200Build = normalizeM200Build(message.m200Build);
+    if (player.weapon === weapon) return;
     if (this.phase === "live" && !player.alive) return;
     if (!["lobby", "live", "over"].includes(this.phase)) return;
 
@@ -798,6 +822,7 @@ publish() {
 
   tryShoot(player, msg) {
     if (!player.alive || this.phase !== "live" || !msg || typeof msg !== "object") return;
+    if (msg.weapon && msg.weapon !== player.weapon) return;
     if (player.reload > 0) return;
 
     const spec = weaponSpec(player.weapon);
@@ -852,7 +877,14 @@ publish() {
     const victim = best.target;
     if (victim.protected) return;
     const head = origin.y + dir.y * best.t > best.state.y + heightOf(best.state) - 0.25;
-    const damage = Math.round(spec.damage * (head ? 1.5 : 1));
+    const near = Number.isFinite(spec.rangeStart) ? spec.rangeStart : spec.range;
+    const far = spec.range;
+    const baseDamage = best.t <= near || far <= near
+      ? spec.damage
+      : best.t >= far
+        ? (spec.damageFar ?? spec.damage)
+        : spec.damage + (spec.damageFar - spec.damage) * (best.t - near) / (far - near);
+    const damage = Math.round(baseDamage * (head ? (spec.headMultiplier ?? 1.5) : 1));
     victim.hp = Math.max(0, victim.hp - damage);
     const point = {
       x: origin.x + dir.x * best.t,
@@ -1115,4 +1147,4 @@ export class RoomManager {
   shutdown() { clearInterval(this.timer); }
 }
 
-export { WEAPON_SPECS };
+export { WEAPON_SPECS, normalizeM200Build };

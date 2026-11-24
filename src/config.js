@@ -5,7 +5,19 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_ASSETS_DIR = path.resolve(__dirname, "../../golden-hour/game");
-const LOCAL_CLIENT_DIR = path.resolve(__dirname, "../../Game/crawl/app");
+const CRAWL_DIR = path.resolve(__dirname, "../../Game/crawl");
+const LOCAL_CLIENT_DIR = (() => {
+  try {
+    const versions = fs.readdirSync(CRAWL_DIR)
+      .filter((name) => /^app-v\d+$/.test(name))
+      .sort((a, b) => Number(b.slice(5)) - Number(a.slice(5)));
+    for (const name of versions) {
+      const candidate = path.join(CRAWL_DIR, name);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  } catch {}
+  return path.join(CRAWL_DIR, "app");
+})();
 
 export const ASSETS_DIR =
   process.env.ASSETS_DIR ||
@@ -28,13 +40,14 @@ export const RTC_ICE_SERVERS = (() => {
   }
 })();
 
-export const WEAPONS = ["ar", "smg", "shotgun", "pistol"];
+export const WEAPONS = ["ar", "smg", "shotgun", "pistol", "m200"];
 
 export const WEAPON_SPECS = [
   { id: "ar",      interval: 0.1,  reloadMs: 2000, mag: 30, reserve: 120, pellets: 1, range: 140, damage: 28, name: "KR-7 CARBINE" },
   { id: "smg",     interval: 0.07, reloadMs: 1700, mag: 32, reserve: 128, pellets: 1, range: 90,  damage: 22, name: "VESPER 9" },
   { id: "shotgun", interval: 0.9,  reloadMs: 2600, mag: 6,  reserve: 24,  pellets: 8, range: 30,  damage: 12, name: "M12 BREACHER" },
   { id: "pistol",  interval: 0.18, reloadMs: 1300, mag: 12, reserve: 60,  pellets: 1, range: 80,  damage: 34, name: "STRIX 9" },
+  { id: "m200",    interval: 60 / 38, reloadMs: 2800, mag: 5, reserve: 25, pellets: 1, range: 180, rangeStart: 70, damage: 110, damageFar: 100, headMultiplier: 2.25, name: "M200 INTERVENTION" },
 ];
 
 export const weaponSpec = (id) =>
